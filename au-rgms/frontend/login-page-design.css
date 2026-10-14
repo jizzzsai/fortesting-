@@ -8,7 +8,7 @@
   padding: 48px;
   overflow: hidden;
   color: var(--ink-1);
-  background: #20522C;
+  background: #0C33CF;
   font-family: var(--font-ui);
 }
 .au-login::before, .au-login::after {
