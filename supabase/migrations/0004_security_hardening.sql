@@ -61,23 +61,30 @@ create policy apps_update on public.applications
   );
 
 
-drop policy if exists publication_grants_update on public.publication_grants;
-create policy publication_grants_update on public.publication_grants
-  for update to authenticated
-  using (
-    ((researcher_id = auth.uid()) and (status = any (array['draft','returned'])))
-    or exists (select 1 from public.profiles p where p.id = auth.uid()
-               and ( p.role::text = any (array['iras','president','ofm','admin'])
-                     or ( p.role::text = any (array['dean','committee'])
-                          and coalesce(p.faculty,'') = coalesce(publication_grants.faculty,'') )))
-  )
-  with check (
-    ((researcher_id = auth.uid()) and (status = any (array['draft','submitted'])))
-    or exists (select 1 from public.profiles p where p.id = auth.uid()
-               and ( p.role::text = any (array['iras','president','ofm','admin'])
-                     or ( p.role::text = any (array['dean','committee'])
-                          and coalesce(p.faculty,'') = coalesce(publication_grants.faculty,'') )))
-  );
+-- Legacy publication grants use a separate table only in older databases.
+do $legacy_publication_policy$
+begin
+  if to_regclass('public.publication_grants') is not null then
+    drop policy if exists publication_grants_update on public.publication_grants;
+    create policy publication_grants_update on public.publication_grants
+      for update to authenticated
+      using (
+        ((researcher_id = auth.uid()) and (status = any (array['draft','returned'])))
+        or exists (select 1 from public.profiles p where p.id = auth.uid()
+                   and ( p.role::text = any (array['iras','president','ofm','admin'])
+                         or ( p.role::text = any (array['dean','committee'])
+                              and coalesce(p.faculty,'') = coalesce(publication_grants.faculty,'') )))
+      )
+      with check (
+        ((researcher_id = auth.uid()) and (status = any (array['draft','submitted'])))
+        or exists (select 1 from public.profiles p where p.id = auth.uid()
+                   and ( p.role::text = any (array['iras','president','ofm','admin'])
+                         or ( p.role::text = any (array['dean','committee'])
+                              and coalesce(p.faculty,'') = coalesce(publication_grants.faculty,'') )))
+      );
+  end if;
+end;
+$legacy_publication_policy$;
 
 
 
@@ -92,6 +99,8 @@ begin
   if public.is_staff() then return true; end if;
   seg := split_part(path, '/', 1);
   if seg = 'publication_grants' then
+    -- Deny legacy document paths when their backing table is absent.
+    if to_regclass('public.publication_grants') is null then return false; end if;
     begin gid := split_part(path, '/', 2)::uuid; exception when others then return false; end;
     return exists (select 1 from public.publication_grants g where g.id = gid and g.researcher_id = auth.uid());
   else

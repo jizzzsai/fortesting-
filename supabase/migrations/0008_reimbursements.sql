@@ -67,6 +67,8 @@ begin
   if public.is_staff() then return true; end if;
   seg := split_part(path, '/', 1);
   if seg = 'publication_grants' then
+    -- Deny legacy document paths when their backing table is absent.
+    if to_regclass('public.publication_grants') is null then return false; end if;
     begin gid := split_part(path, '/', 2)::uuid; exception when others then return false; end;
     return exists (select 1 from public.publication_grants g where g.id = gid and g.researcher_id = auth.uid());
   elsif seg = 'reimbursements' then
